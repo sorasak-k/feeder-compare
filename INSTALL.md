@@ -1,8 +1,8 @@
 # Installation
 
-Stat Cap Compare is a Streamlit app that compares vehicle stat-capacity logs from the
-feeder service against the stat-cap service. It runs entirely locally — no database or
-network service is required, only CSV files you upload through the browser.
+Stat Cap Compare is a Streamlit app that compares vehicle stat-capacity logs from the feeder service against the
+stat-cap service. It runs entirely locally — no database or network service is required, only CSV files you upload
+through the browser.
 
 Steps 1 and 2 apply everywhere. Then jump to the section for your OS:
 
@@ -13,16 +13,16 @@ Steps 1 and 2 apply everywhere. Then jump to the section for your OS:
 
 ## 1. Requirements
 
-| Component | Version | Notes |
-|-----------|---------|-------|
-| Python    | 3.14.4 | Pinned target; 3.10+ also works |
-| Streamlit | 1.61.1 | Pinned in `requirements.txt`; needs ≥1.49 for `st.navigation`, `st.pills`, `width="stretch"` |
-| pandas    | 3.0.5  | Pinned in `requirements.txt`; ≥2.0 also works |
-| Browser   | any modern | Chrome / Firefox / Edge / Safari |
+| Component | Version    | Notes                                                                                        |
+|-----------|------------|----------------------------------------------------------------------------------------------|
+| Python    | 3.14.4     | Pinned target; 3.10+ also works                                                              |
+| Streamlit | 1.61.1     | Pinned in `requirements.txt`; needs ≥1.49 for `st.navigation`, `st.pills`, `width="stretch"` |
+| pandas    | 3.0.5      | Pinned in `requirements.txt`; ≥2.0 also works                                                |
+| Browser   | any modern | Chrome / Firefox / Edge / Safari                                                             |
 
 The project targets **Python 3.14.4**, the version recorded at the top of
-`requirements.txt`. Anything from 3.10 up will run the app, but match 3.14.4 if you want
-the exact environment the pins were resolved against.
+`requirements.txt`. Anything from 3.10 up will run the app, but match 3.14.4 if you want the exact environment the pins
+were resolved against.
 
 ## 2. Get the project
 
@@ -127,8 +127,8 @@ pip install -r requirements.txt
 streamlit run app.py
 ```
 
-If your shell is `zsh` (the default) or `bash`, the `source` line is the same. On `fish`,
-use `source .venv/bin/activate.fish` instead.
+If your shell is `zsh` (the default) or `bash`, the `source` line is the same. On `fish`, use
+`source .venv/bin/activate.fish` instead.
 
 ## 3D. Windows
 
@@ -139,8 +139,8 @@ winget install Python.Python.3.14
 py --version
 ```
 
-Or use the [python.org installer](https://www.python.org/downloads/windows/) — tick
-**"Add python.exe to PATH"** on the first screen.
+Or use the [python.org installer](https://www.python.org/downloads/windows/) — tick **"Add python.exe to PATH"** on the
+first screen.
 
 **Set up and run** in PowerShell:
 
@@ -153,8 +153,7 @@ pip install -r requirements.txt
 streamlit run app.py
 ```
 
-If activation is blocked by *"running scripts is disabled on this system"*, allow it for
-the current session only:
+If activation is blocked by *"running scripts is disabled on this system"*, allow it for the current session only:
 
 ```powershell
 Set-ExecutionPolicy -Scope Process -ExecutionPolicy Bypass
@@ -223,8 +222,8 @@ streamlit run app.py --server.port 8765
 streamlit run app.py --server.address 0.0.0.0 --server.port 8765
 ```
 
-Others on the network then open `http://<your-ip>:8765`. The app has no authentication,
-so only do this on a trusted network. The port also has to be open:
+Others on the network then open `http://<your-ip>:8765`. The app has no authentication, so only do this on a trusted
+network. The port also has to be open:
 
 ```bash
 # Fedora / RHEL — this session only
@@ -236,13 +235,11 @@ sudo firewall-cmd --add-port=8765/tcp
 sudo ufw allow 8765/tcp
 ```
 
-macOS and Windows prompt you to allow incoming connections the first time instead —
-approve the dialog for Python.
+macOS and Windows prompt you to allow incoming connections the first time instead — approve the dialog for Python.
 
 ### Uploading large CSVs
 
-Streamlit rejects uploads over 200 MB by default. Raise the limit when your exports are
-bigger:
+Streamlit rejects uploads over 200 MB by default. Raise the limit when your exports are bigger:
 
 ```bash
 streamlit run app.py --server.maxUploadSize 500
@@ -254,8 +251,8 @@ streamlit run app.py --server.maxUploadSize 500
 2. Upload `example_data/feeder_data/feeder_vehicle_stat_cap_log.csv` as the feeder file.
 3. Upload `example_data/stat_cap_data/vehicle_stat_cap_log.csv` as the stat-cap file.
 
-A metrics row and a colour-coded comparison table should appear. If it does, the
-installation is complete — continue with [USAGE.md](USAGE.md).
+A metrics row and a colour-coded comparison table should appear. If it does, the installation is complete — continue
+with [USAGE.md](USAGE.md).
 
 ## Troubleshooting
 
@@ -272,8 +269,7 @@ Run `Set-ExecutionPolicy -Scope Process -ExecutionPolicy Bypass` first, or use
 `cmd.exe` with `.venv\Scripts\activate.bat`.
 
 **`ModuleNotFoundError: No module named 'common'`**
-The app was started from the wrong directory. Run it from the project root, not from
-inside `pages/`.
+The app was started from the wrong directory. Run it from the project root, not from inside `pages/`.
 
 **`Port 8501 is already in use`**
 Another Streamlit process is still running. Find and stop it, or pass `--server.port`
@@ -301,5 +297,5 @@ The browser cached the old front-end bundle. Hard-refresh the tab: `Ctrl+Shift+R
 (Linux / Windows) or `Cmd+Shift+R` (macOS).
 
 **Browser shows a blank page or hangs on a huge file**
-The table is styled row by row, which is slow for very large results. Filter down on the
-page (see USAGE.md) or split the CSV before uploading.
+The table is styled row by row, which is slow for very large results. Filter down on the page (see USAGE.md) or split
+the CSV before uploading.
