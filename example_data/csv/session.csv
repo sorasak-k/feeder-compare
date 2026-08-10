@@ -1,0 +1,2 @@
+op_id,vhc_id,is_tali,is_admin,mod_flag,dat_flag,aprx_flag,add_at,end_at,add_usr_id,add_dv_id,end_usr_id,end_dv_id,sys_id,lyr_id,net_id,net_ver,usr_id,dist,stat_flag,net_beg_dist,net_end_dist,net_tol_dist,last_snap_at
+5,13,true,false,1,503,0,2026-08-06 01:00:00.150000,2026-08-06 05:00:00.150000,805,425335,805,425335,2,1,1,4,805,3675,,,,,
