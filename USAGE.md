@@ -186,10 +186,19 @@ The three queries, in the order they appear:
 |-----------------------------------|-------------------------------|---------------------------------------------------------------|
 | `session.csv`                     | `vehicle_session_log`         | opens 30 days before `start_time`, still open at `start_time` |
 | `feeder_vehicle_stat_cap_log.csv` | `feeder_vehicle_stat_cap_log` | `add_at` within the range                                     |
-| `vehicle_stat_cap_log.csv`        | `vehicle_stat_cap_log`        | `src_at` within the range, `mod_at` within ±1 day of it       |
+| `vehicle_stat_cap_log.csv`        | `vehicle_stat_cap_log`        | see below — two branches                                      |
 
 The session query reaches back 30 days on purpose: a trip that started days earlier but was still running at
 `start_time` has to be included, or rows on the day under examination would look like they fall outside every session.
+
+The stat-cap query is an `OR` of two branches, because the row's own timestamp depends on whether `src_at` was recorded:
+
+- `src_at` present → window on `src_at`, with `mod_at` allowed ±2 days outside the range (a row can be written well after
+  the event it describes)
+- `src_at is null` → nothing to window on, so `mod_at` itself must fall inside the range
+
+Without the second branch the `src_at is null` rows would be dropped by the export, even though the comparison pages fall
+back to `mod_at` for exactly those rows.
 
 Copy a single query with the button in the top-right of its code block, or use **Download query.sql** to get all three
 as one file named
