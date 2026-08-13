@@ -147,7 +147,8 @@ def highlight_row(row):
     return [color] * len(row)
 
 
-LOCAL_TZ = timezone(timedelta(hours=7))
+LOCAL_TZ = timezone(timedelta(hours=7))  # Asia/Bangkok — no DST, so a fixed offset is exact
+LOCAL_TZ_LABEL = "Asia/Bangkok"
 DEFAULT_OP_ID = 52
 
 QUERY_TEMPLATES = [
@@ -158,7 +159,7 @@ QUERY_TEMPLATES = [
 from vehicle_session_log vsl
 where vsl.op_id = ${op_id}
   and vsl.add_at > ${start_time}::timestamp - interval '30 days'
-  and vsl.add_at < ${start_time}::timestamp + interval '1 day'
+  and vsl.add_at < ${end_time}::timestamp
   and vsl.end_at >= ${start_time}::timestamp
 order by vsl.op_id asc, vsl.vhc_id asc, vsl.add_at asc, vsl.end_at asc;""",
     ),
@@ -169,7 +170,7 @@ order by vsl.op_id asc, vsl.vhc_id asc, vsl.add_at asc, vsl.end_at asc;""",
 from feeder_vehicle_stat_cap_log fvscl
 where fvscl.rule_op_id = ${op_id}
   and fvscl.add_at >= ${start_time}::timestamp
-  and fvscl.add_at < ${start_time}::timestamp + interval '1 day'
+  and fvscl.add_at < ${end_time}::timestamp
 order by op_id ASC , vhc_id ASC, add_at ASC;""",
     ),
     (
@@ -179,30 +180,38 @@ order by op_id ASC , vhc_id ASC, add_at ASC;""",
 from vehicle_stat_cap_log vscl
 where vscl.op_id = ${op_id}
   and vscl.mod_at >= ${start_time}::timestamp - interval '1 day'
-  and vscl.mod_at < ${start_time}::timestamp + interval '2 day'
+  and vscl.mod_at < ${end_time}::timestamp + interval '1 day'
   and vscl.src_at >= ${start_time}::timestamp
-  and vscl.src_at < ${start_time}::timestamp + interval '1 day'
+  and vscl.src_at < ${end_time}::timestamp
 order by op_id ASC , vhc_id ASC, mod_at ASC;""",
     ),
 ]
 
 
-def local_date_to_utc(local_date, tz=LOCAL_TZ):
-    """Midnight of local_date in tz, expressed as a naive UTC datetime.
+def local_to_utc(local_dt, tz=LOCAL_TZ):
+    """A naive local (Asia/Bangkok) datetime, expressed as a naive UTC datetime.
 
-    A GMT+7 date of 2026-10-10 starts at 2026-10-09 17:00:00 UTC.
+    2026-10-10 00:00 in GMT+7 is 2026-10-09 17:00:00 UTC.
     """
-    local_start = datetime.combine(local_date, time.min, tzinfo=tz)
-    return local_start.astimezone(timezone.utc).replace(tzinfo=None)
+    return local_dt.replace(tzinfo=tz).astimezone(timezone.utc).replace(tzinfo=None)
 
 
-def format_start_time(local_date, tz=LOCAL_TZ):
-    return local_date_to_utc(local_date, tz).strftime("%Y-%m-%d %H:%M:%S")
+def combine_local(local_date, local_time, tz=LOCAL_TZ):
+    """Join a date and a time picked in local (Asia/Bangkok) terms into a naive UTC datetime."""
+    return local_to_utc(datetime.combine(local_date, local_time or time.min), tz)
 
 
-def build_queries(op_id, local_date, tz=LOCAL_TZ):
-    """Render the three export queries for one op_id and one local (GMT+7) date."""
-    values = {"op_id": int(op_id), "start_time": f"'{format_start_time(local_date, tz)}'"}
+def format_utc(utc_dt):
+    return utc_dt.strftime("%Y-%m-%d %H:%M:%S")
+
+
+def build_queries(op_id, start_utc, end_utc, tz=LOCAL_TZ):
+    """Render the three export queries for one op_id over a UTC window, end exclusive."""
+    values = {
+        "op_id": int(op_id),
+        "start_time": f"'{format_utc(start_utc)}'",
+        "end_time": f"'{format_utc(end_utc)}'",
+    }
     return [
         (label, table, Template(template).substitute(values))
         for label, table, template in QUERY_TEMPLATES

@@ -50,8 +50,9 @@ Matching is exact to the millisecond, so two events that describe the same thing
 ## Getting the data
 
 The **Generate SQL** page writes the three export queries for you. Give it an `op_id`
-(default `52`) and a date; the date is entered in local **GMT+7** but converted to UTC before substitution, so
-`2026-10-10` becomes `start_time = '2026-10-09 17:00:00'` and each query covers exactly that local day.
+(default `52`) and a start and end date/time; the range is entered in **Asia/Bangkok** (GMT+7) but converted to UTC
+before substitution, so `2026-10-10 08:30` → `2026-10-12 20:00` becomes `start_time = '2026-10-10 01:30:00'` and
+`end_time = '2026-10-12 13:00:00'`. The end is exclusive.
 
 Run the queries, save the results as CSV, then upload them on a comparison page.
 

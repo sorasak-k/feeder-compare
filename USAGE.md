@@ -170,35 +170,39 @@ against the database, then come back with the results.
 Two inputs:
 
 - **op_id** — the operation to export, default `52`
-- **Date (GMT+7)** — the local day you want, defaults to today
+- **Start date** / **Start time** — the beginning of the window, defaults to today at `00:00`
+- **End date** / **End time** — the end of the window, defaults to tomorrow at `00:00`
 
-The date is entered in local **GMT+7** time but the database stores UTC, so the page converts before substituting.
-Picking `2026-10-10` yields a `start_time` of
-`2026-10-09 17:00:00`, and the caption under the inputs always shows the conversion it applied. Each query then covers
-`start_time` to `start_time + 1 day`, i.e. exactly the local day you asked for.
+The four range inputs are entered in **Asia/Bangkok** (GMT+7) but the database stores UTC, so the page converts before
+substituting: `2026-10-10 08:30` → `2026-10-12 20:00` local yields `start_time = '2026-10-10 01:30:00'` and
+`end_time = '2026-10-12 13:00:00'`. The caption under the inputs always shows both conversions. Each query then covers
+`start_time` to `end_time`, with the end **exclusive** — so the default today `00:00` → tomorrow `00:00` gives exactly
+one local day. The time pickers step by one minute. If the end is not after the start, the page says so and generates
+nothing.
 
 The three queries, in the order they appear:
 
 | Query                             | Table                         | Window                                                        |
 |-----------------------------------|-------------------------------|---------------------------------------------------------------|
 | `session.csv`                     | `vehicle_session_log`         | opens 30 days before `start_time`, still open at `start_time` |
-| `feeder_vehicle_stat_cap_log.csv` | `feeder_vehicle_stat_cap_log` | `add_at` within the day                                       |
-| `vehicle_stat_cap_log.csv`        | `vehicle_stat_cap_log`        | `src_at` within the day, `mod_at` within ±1 day               |
+| `feeder_vehicle_stat_cap_log.csv` | `feeder_vehicle_stat_cap_log` | `add_at` within the range                                     |
+| `vehicle_stat_cap_log.csv`        | `vehicle_stat_cap_log`        | `src_at` within the range, `mod_at` within ±1 day of it       |
 
 The session query reaches back 30 days on purpose: a trip that started days earlier but was still running at
 `start_time` has to be included, or rows on the day under examination would look like they fall outside every session.
 
 Copy a single query with the button in the top-right of its code block, or use **Download query.sql** to get all three
 as one file named
-`query_op<op_id>_<date>.sql`.
+`query_op<op_id>_<start>_<end>.sql`, where both stamps are the UTC window (e.g.
+`query_op52_20261010-0130_20261012-1300.sql`).
 
 The templates mirror `example_data/sql/query.sql` and live in `QUERY_TEMPLATES` in
 `common.py`; edit them there if the schema changes.
 
 ## A typical workflow
 
-1. Open **Generate SQL**, set the op_id and the GMT+7 date you are checking, and run the three queries against the
-   database to get the CSVs.
+1. Open **Generate SQL**, set the op_id and the Asia/Bangkok time range you are checking, and run the three queries
+   against the database to get the CSVs.
 2. Open **Session Filter**, confirm the sessions look sane, and note the `op_id` /
    `vhc_id` pairs of interest.
 3. Open **Compare Stat with Session** and upload all three files. Leave *Show only diffs*
