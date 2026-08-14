@@ -4,6 +4,7 @@ where vsl.op_id = ${op_id}
   and vsl.add_at > ${start_time}::timestamp - interval '30 days'
   and vsl.add_at < ${end_at}::timestamp
   and vsl.end_at >= ${start_time}::timestamp
+  and vsl.is_tali is TRUE
 order by vsl.op_id asc, vsl.vhc_id asc, vsl.add_at asc, vsl.end_at asc;
 
 select *
