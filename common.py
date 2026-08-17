@@ -4,6 +4,8 @@ from string import Template
 import pandas as pd
 import streamlit as st
 
+APP_VERSION = "0.0.4"
+
 FEEDER_TIME_COL = "add_at"
 STAT_TIME_COL = "mod_at"
 STAT_SRC_TIME_COL = "src_at"
