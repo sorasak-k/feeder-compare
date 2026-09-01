@@ -5,7 +5,7 @@ import common
 st.set_page_config(page_title="Stat Cap Compare", layout="wide")
 
 st.logo(
-    f"""<svg xmlns="http://www.w3.org/2000/svg" width="220" height="40">
+    f"""<svg xmlns="http://www.w3.org/2000/svg" width="260" height="26">
     <style>
         .name {{ fill: #262730; }}
         .version {{ fill: #808495; }}
@@ -14,8 +14,7 @@ st.logo(
             .version {{ fill: #A3A8B8; }}
         }}
     </style>
-    <text x="0" y="18" font-family="sans-serif" font-size="16" font-weight="600" class="name">Stat Cap Compare</text>
-    <text x="0" y="34" font-family="sans-serif" font-size="11" class="version">v{common.APP_VERSION}</text>
+    <text x="0" y="19" font-family="sans-serif" font-size="18" font-weight="600" class="name">Stat Cap Compare<tspan dx="6" font-size="13" font-weight="400" class="version">v{common.APP_VERSION}</tspan></text>
     </svg>""",
     size="large",
 )

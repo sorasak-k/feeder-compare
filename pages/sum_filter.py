@@ -4,7 +4,7 @@ import streamlit as st
 import common
 
 st.title("Sum Filter")
-st.caption("Sum cur, inc, and dec after filtering by vhc, network, node, and session.")
+st.caption("Sum inc and dec after filtering by vhc, network, node, and session.")
 
 
 def _load_session(session_file, key_prefix):

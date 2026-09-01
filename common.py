@@ -280,11 +280,10 @@ def render_filterable_table(df, label, id_cols=ID_FILTER_COLS, time_cols=TIME_FI
 
 
 def render_sum_metrics(df, label="rows"):
-    m1, m2, m3, m4 = st.columns(4)
+    m1, m2, m3 = st.columns(3)
     m1.metric(label, len(df))
-    m2.metric("Sum cur", int(df["cur"].sum()) if len(df) else 0)
-    m3.metric("Sum inc", int(df["inc"].sum()) if len(df) else 0)
-    m4.metric("Sum dec", int(df["dec"].sum()) if len(df) else 0)
+    m2.metric("Sum inc", int(df["inc"].sum()) if len(df) else 0)
+    m3.metric("Sum dec", int(df["dec"].sum()) if len(df) else 0)
 
 
 def render_comparison(result):
