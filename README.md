@@ -24,7 +24,9 @@ Open <http://localhost:8501>. Per-OS setup steps are in [INSTALL.md](INSTALL.md)
 | **Compare Stat Only**            | Compare every row in both logs, ignoring sessions | feeder + stat-cap CSV           |
 | **Compare Stat with Session**    | Compare only rows inside a session window         | session + feeder + stat-cap CSV |
 | **Compare Stat Outside Session** | Compare only rows outside every session window    | session + feeder + stat-cap CSV |
-| **Session Filter**               | Browse and filter the session log                 | session CSV                     |
+| **Session Filter**               | Browse and filter the session log, including network-id columns | session CSV       |
+| **Stat Cap Filter**              | Browse and filter the stat-cap log                | stat-cap CSV                    |
+| **Feeder Cap Filter**            | Browse and filter the feeder log                  | feeder CSV                      |
 | **Generate SQL**                 | Produce the three queries that export those CSVs  | op_id + date                    |
 
 ## How the comparison works

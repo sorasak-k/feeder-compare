@@ -11,7 +11,7 @@ streamlit run app.py
 
 Then pick a page from the sidebar.
 
-## The five pages
+## The seven pages
 
 | Page                             | What it does                                              | Files needed                |
 |----------------------------------|-----------------------------------------------------------|-----------------------------|
@@ -19,6 +19,8 @@ Then pick a page from the sidebar.
 | **Compare Stat with Session**    | Compares only rows that fall inside a session window      | session + feeder + stat-cap |
 | **Compare Stat Outside Session** | Compares only rows that fall outside every session window | session + feeder + stat-cap |
 | **Session Filter**               | Browses and filters the session log on its own            | session                     |
+| **Stat Cap Filter**              | Browses and filters the stat-cap log on its own           | stat-cap                    |
+| **Feeder Cap Filter**            | Browses and filters the feeder log on its own             | feeder                      |
 | **Generate SQL**                 | Produces the three export queries that yield those CSVs   | none                        |
 
 ## Input files
@@ -155,12 +157,36 @@ Use it for: catching capacity events logged when no trip was in progress — oft
 
 Upload just the session log. You get:
 
-- `op_id` and `vhc_id` multi-selects (all selected by default)
+- `op_id`, `vhc_id`, and — since `session.csv` includes them — `sys_id`, `lyr_id`, `net_id` multi-selects (all
+  selected by default)
 - range sliders for `add_at` and `end_at`
 - a caption reporting how many of the total sessions are shown
 - the filtered session table
 
 Use it for: finding the session windows worth investigating, before going back to a comparison page.
+
+### Stat Cap Filter
+
+Upload just the stat-cap log. You get:
+
+- `op_id` and `vhc_id` multi-selects (all selected by default)
+- range sliders for `mod_at` and, if present, `src_at`
+- a caption reporting how many of the total stat-cap rows are shown
+- the filtered stat-cap table
+
+Use it for: spot-checking the stat-cap export on its own before pairing it with a feeder log.
+
+### Feeder Cap Filter
+
+Upload just the feeder log. You get:
+
+- multi-selects for `op_id`, `vhc_id`, and whichever of `net_sys_id`, `net_lyr_id`, `net_id`, `nod_sys_id`,
+  `nod_lyr_id`, `nod_id` are present (all selected by default)
+- a range slider for `add_at`
+- a caption reporting how many of the total feeder rows are shown
+- the filtered feeder table
+
+Use it for: narrowing a feeder export down to a specific network or node before comparing it against stat-cap.
 
 ### Generate SQL
 

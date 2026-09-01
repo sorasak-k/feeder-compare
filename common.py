@@ -4,13 +4,20 @@ from string import Template
 import pandas as pd
 import streamlit as st
 
-APP_VERSION = "0.0.4"
+APP_VERSION = "0.0.5"
 
 FEEDER_TIME_COL = "add_at"
 STAT_TIME_COL = "mod_at"
 STAT_SRC_TIME_COL = "src_at"
 KEY_COLS = ["op_id", "vhc_id"]
 VALUE_COLS = ["cur", "inc", "dec"]
+ID_FILTER_COLS = [
+    "op_id", "vhc_id",
+    "sys_id", "lyr_id",
+    "net_sys_id", "net_lyr_id", "net_id",
+    "nod_sys_id", "nod_lyr_id", "nod_id",
+]
+TIME_FILTER_COLS = ["add_at", "end_at", "mod_at", "src_at"]
 
 
 def _clean_value(value):
@@ -66,10 +73,12 @@ def load_stat_csv(uploaded_file):
 
 
 SESSION_COLS = ["session_add_at", "session_end_at", "session_op_id", "session_vhc_id"]
+SESSION_NETWORK_COLS = ["sys_id", "lyr_id", "net_id"]
 
 
-def _match_session_windows(df, time_col, session_df):
-    sessions = session_df[KEY_COLS + ["add_at", "end_at"]].rename(
+def _match_session_windows(df, time_col, session_df, extra_cols=()):
+    session_cols = ["add_at", "end_at"] + [c for c in extra_cols if c in session_df.columns]
+    sessions = session_df[KEY_COLS + session_cols].rename(
         columns={"add_at": "session_add_at", "end_at": "session_end_at"}
     )
     merged = df.reset_index().merge(sessions, on=KEY_COLS)
@@ -77,13 +86,16 @@ def _match_session_windows(df, time_col, session_df):
     return merged.loc[mask]
 
 
-def filter_by_session_window(df, time_col, session_df):
-    matched = _match_session_windows(df, time_col, session_df).drop_duplicates(subset="index", keep="first").copy()
+def filter_by_session_window(df, time_col, session_df, extra_cols=()):
+    matched = _match_session_windows(df, time_col, session_df, extra_cols).drop_duplicates(
+        subset="index", keep="first"
+    ).copy()
     matched["session_op_id"] = matched["op_id"]
     matched["session_vhc_id"] = matched["vhc_id"]
 
     result = df.loc[df.index.isin(matched["index"])].copy()
-    return result.join(matched.set_index("index")[SESSION_COLS])
+    extra_present = [c for c in extra_cols if c in session_df.columns]
+    return result.join(matched.set_index("index")[SESSION_COLS + extra_present])
 
 
 def filter_outside_session_window(df, time_col, session_df):
@@ -226,6 +238,53 @@ def build_queries(op_id, start_utc, end_utc, tz=LOCAL_TZ):
         (label, table, Template(template).substitute(values))
         for label, table, template in QUERY_TEMPLATES
     ]
+
+
+def render_filterable_table(df, label, id_cols=ID_FILTER_COLS, time_cols=TIME_FILTER_COLS, key_prefix=""):
+    df = df.copy()
+    present_id_cols = [col for col in id_cols if col in df.columns]
+    present_time_cols = [col for col in time_cols if col in df.columns]
+
+    mask = pd.Series(True, index=df.index)
+
+    for row_start in range(0, len(present_id_cols), 4):
+        row_cols = present_id_cols[row_start:row_start + 4]
+        columns = st.columns(len(row_cols))
+        for column, col in zip(columns, row_cols):
+            df[col] = pd.to_numeric(df[col], errors="coerce").astype("Int64")
+            options = sorted(df[col].dropna().unique())
+            selected = column.multiselect(col, options, default=options, key=f"{key_prefix}_{col}")
+            if len(selected) < len(options):
+                mask &= df[col].isin(selected)
+
+    for col in present_time_cols:
+        if not pd.api.types.is_datetime64_any_dtype(df[col]):
+            df[col] = parse_datetime(df[col])
+        col_min, col_max = df[col].min(), df[col].max()
+        if pd.isna(col_min) or pd.isna(col_max) or col_min == col_max:
+            continue
+        col_range = st.slider(
+            f"{col} range",
+            min_value=col_min.to_pydatetime(),
+            max_value=col_max.to_pydatetime(),
+            value=(col_min.to_pydatetime(), col_max.to_pydatetime()),
+            key=f"{key_prefix}_{col}",
+        )
+        mask &= df[col].between(*col_range)
+
+    filtered = df[mask]
+
+    st.caption(f"{len(filtered)} of {len(df)} {label} shown")
+    st.dataframe(filtered, width="stretch")
+    return filtered
+
+
+def render_sum_metrics(df, label="rows"):
+    m1, m2, m3, m4 = st.columns(4)
+    m1.metric(label, len(df))
+    m2.metric("Sum cur", int(df["cur"].sum()) if len(df) else 0)
+    m3.metric("Sum inc", int(df["inc"].sum()) if len(df) else 0)
+    m4.metric("Sum dec", int(df["dec"].sum()) if len(df) else 0)
 
 
 def render_comparison(result):
