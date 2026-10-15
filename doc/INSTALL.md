@@ -36,14 +36,18 @@ stat_cap_compare/
 ├── app.py                 # entry point — page navigation
 ├── common.py              # CSV loading, session filtering, comparison, SQL templates
 ├── requirements.txt
-├── INSTALL.md
-├── USAGE.md
+├── README.md
+├── doc/
+│   ├── INSTALL.md
+│   ├── USAGE.md
+│   └── feeder_stat_cap_cross_counting_explained.md
 ├── pages/
-│   ├── compare.py
-│   ├── compare_with_session.py
-│   ├── compare_outside_session.py
+│   ├── cross_counting_compare.py
+│   ├── generate_sql.py
 │   ├── session_filter.py
-│   └── generate_sql.py
+│   ├── stat_cap_filter.py
+│   ├── feeder_cap_filter.py
+│   └── sum_filter.py
 ├── example_data/          # sample CSVs and the source SQL template
 └── data/                  # your own exports (optional)
 ```

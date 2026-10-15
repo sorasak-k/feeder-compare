@@ -7,7 +7,7 @@ st.title("Compare Cross-Counting")
 st.caption(
     "Reconciles feeder_vehicle_stat_cap_log against vehicle_stat_cap_log reading by reading, "
     "accounting for cross-counted (split) readings at stops shared by two routes — see "
-    "feeder_stat_cap_cross_counting_explained.md for the full rules."
+    "doc/feeder_stat_cap_cross_counting_explained.md for the full rules."
 )
 
 col1, col2 = st.columns(2)

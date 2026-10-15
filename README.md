@@ -15,18 +15,27 @@ pip install -r requirements.txt
 streamlit run app.py
 ```
 
-Open <http://localhost:8501>. Per-OS setup steps are in [INSTALL.md](INSTALL.md).
+Open <http://localhost:8501>. Per-OS setup steps are in [doc/INSTALL.md](doc/INSTALL.md).
 
 ## Pages
 
-| Page                             | Purpose                                           | Inputs                          |
-|----------------------------------|---------------------------------------------------|---------------------------------|
-| **Compare Cross-Counting**       | Reconcile readings, accounting for cross-counted (split) route A→B rows | feeder + stat-cap CSV |
-| **Session Filter**               | Browse and filter the session log, including network-id columns | session CSV       |
-| **Stat Cap Filter**              | Browse and filter the stat-cap log                | stat-cap CSV                    |
-| **Feeder Cap Filter**            | Browse and filter the feeder log                  | feeder CSV                      |
-| **Sum Filter**                   | Sum cur/inc/dec after filtering by vhc, network, node, and session | session + (feeder or stat-cap) CSV |
-| **Generate SQL**                 | Produce the three queries that export those CSVs  | op_id + date                    |
+The sidebar groups the pages into **Test** and **Dev**.
+
+### Test
+
+| Page                       | Purpose                                                                  | Inputs                |
+|----------------------------|--------------------------------------------------------------------------|-----------------------|
+| **Compare Cross-Counting** | Reconcile readings, accounting for cross-counted (split) route A→B rows  | feeder + stat-cap CSV |
+| **Generate SQL**           | Produce the three queries that export those CSVs                         | op_id + date          |
+
+### Dev
+
+| Page                  | Purpose                                                            | Inputs                             |
+|-----------------------|--------------------------------------------------------------------|------------------------------------|
+| **Session Filter**    | Browse and filter the session log, including network-id columns    | session CSV                        |
+| **Stat Cap Filter**   | Browse and filter the stat-cap log                                 | stat-cap CSV                       |
+| **Feeder Cap Filter** | Browse and filter the feeder log                                   | feeder CSV                         |
+| **Sum Filter**        | Sum inc/dec after filtering by vhc, network, node, and session     | session + (feeder or stat-cap) CSV |
 
 ## How the comparison works
 
@@ -42,7 +51,7 @@ pair rather than a mismatch.
 
 **Mismatch vs. unmatched:** a *mismatch* means the reading is in both logs but a value differs — feeder changed a
 number. *Unmatched* (`feeder_only` / `stat_only`) means the reading is in only one log, so nothing was compared — it
-was lost, or the timestamps do not line up. See [USAGE.md](USAGE.md#mismatch-vs-unmatched) for examples.
+was lost, or the timestamps do not line up. See [doc/USAGE.md](doc/USAGE.md#mismatch-vs-unmatched) for examples.
 
 ### Split readings
 
@@ -65,7 +74,7 @@ The page shows **Feeder rows** and **Stat-cap rows** (the uploaded files), **Rea
 reading — lower than feeder rows by one per split), and a breakdown that adds up to Readings: **Match**,
 **Split match**, **Mismatch** (`mismatch` + `split_mismatch`), **Fault**, and **Unmatched** (`feeder_only` +
 `stat_only`). A **Route A → Route B counter** shows how often each route pair cross-counted.
-Worked examples and known gaps are in [USAGE.md](USAGE.md#compare-cross-counting).
+Worked examples and known gaps are in [doc/USAGE.md](doc/USAGE.md#compare-cross-counting).
 
 ## Getting the data
 
@@ -83,11 +92,14 @@ app.py                  # entry point — page navigation
 common.py               # CSV loading, session filtering, comparison, SQL templates
 requirements.txt        # pinned: streamlit 1.61.1, pandas 3.0.5 (Python 3.14.4)
 pages/                  # one file per page
+doc/                    # INSTALL, USAGE, and the cross-counting explainer
 example_data/           # sample CSVs and the source SQL template
 data/                   # your own exports (not tracked in git)
 ```
 
 ## Documentation
 
-- [INSTALL.md](INSTALL.md) — requirements, per-OS setup, run options, troubleshooting
-- [USAGE.md](USAGE.md) — input formats, every page in detail, reading results, workflow
+- [doc/INSTALL.md](doc/INSTALL.md) — requirements, per-OS setup, run options, troubleshooting
+- [doc/USAGE.md](doc/USAGE.md) — input formats, every page in detail, reading results, workflow
+- [doc/feeder_stat_cap_cross_counting_explained.md](doc/feeder_stat_cap_cross_counting_explained.md) — how and when
+  the feeder splits a reading into two rows (cross-counting)

@@ -4,7 +4,7 @@ from string import Template
 import pandas as pd
 import streamlit as st
 
-APP_VERSION = "0.1.0"
+APP_VERSION = "0.1.1"
 
 FEEDER_TIME_COL = "add_at"
 STAT_TIME_COL = "mod_at"
@@ -107,7 +107,7 @@ CROSS_COUNT_STATUSES = [
 def _classify_split_pair(group):
     """Given the two feeder rows for one cross-counted reading, return (alighting_row, boarding_row).
 
-    Per feeder_stat_cap_cross_counting_explained.md: the alighting half keeps `dec` with `inc`
+    Per doc/feeder_stat_cap_cross_counting_explained.md: the alighting half keeps `dec` with `inc`
     zeroed, the boarding half keeps `inc` with `dec` zeroed. When both counters are zero (a real
     but rare case the doc calls out), fall back to session timing: the alighting half's own
     reading time sits closer to its session's `session_end_at` (the run that is ending).
@@ -126,7 +126,7 @@ def _classify_split_pair(group):
 def summarize_feeder_readings(feeder_df):
     """Collapse feeder_vehicle_stat_cap_log rows to one row per (op_id, vhc_id, add_at) reading,
     reconstructing the source counters and, for cross-counted (split) readings, the route-A ->
-    route-B transition. See feeder_stat_cap_cross_counting_explained.md section 3.
+    route-B transition. See doc/feeder_stat_cap_cross_counting_explained.md section 3.
     """
     present_route_cols = [c for c in ROUTE_COLS if c in feeder_df.columns]
     has_session_end = "session_end_at" in feeder_df.columns

@@ -13,14 +13,17 @@ Then pick a page from the sidebar.
 
 ## The six pages
 
-| Page                       | What it does                                                                 | Files needed                       |
-|----------------------------|------------------------------------------------------------------------------|------------------------------------|
-| **Compare Cross-Counting** | Reconciles readings, accounting for cross-counted (split) route A→B rows     | feeder + stat-cap                  |
-| **Generate SQL**           | Produces the three export queries that yield those CSVs                      | none                               |
-| **Session Filter**         | Browses and filters the session log on its own                               | session                            |
-| **Stat Cap Filter**        | Browses and filters the stat-cap log on its own                              | stat-cap                           |
-| **Feeder Cap Filter**      | Browses and filters the feeder log on its own                                | feeder                             |
-| **Sum Filter**             | Sums `inc`/`dec` after filtering by vhc, network, node, and session          | session + (feeder or stat-cap)     |
+The sidebar groups the pages into **Test** (the comparison and its data export) and **Dev** (tools for browsing,
+filtering, and summing the raw logs).
+
+| Group    | Page                       | What it does                                                             | Files needed                   |
+|----------|----------------------------|--------------------------------------------------------------------------|--------------------------------|
+| **Test** | **Compare Cross-Counting** | Reconciles readings, accounting for cross-counted (split) route A→B rows | feeder + stat-cap              |
+| **Test** | **Generate SQL**           | Produces the three export queries that yield those CSVs                  | none                           |
+| **Dev**  | **Session Filter**         | Browses and filters the session log on its own                           | session                        |
+| **Dev**  | **Stat Cap Filter**        | Browses and filters the stat-cap log on its own                          | stat-cap                       |
+| **Dev**  | **Feeder Cap Filter**      | Browses and filters the feeder log on its own                            | feeder                         |
+| **Dev**  | **Sum Filter**             | Sums `inc`/`dec` after filtering by vhc, network, node, and session      | session + (feeder or stat-cap) |
 
 ## Input files
 
@@ -116,7 +119,8 @@ milliseconds apart before treating them as missing events.
 Upload the feeder log and the stat-cap log — no session file needed. The page does not assume one feeder row per
 stat-cap reading: a reading taken at a stop shared by two routes (a vehicle ending a run
 on route A and starting one on route B) is legitimately written by the feeder service as **two** rows, one per route —
-see `feeder_stat_cap_cross_counting_explained.md` for the full explanation.
+see [feeder_stat_cap_cross_counting_explained.md](feeder_stat_cap_cross_counting_explained.md) for the full
+explanation.
 
 #### How a reading is reconstructed
 
