@@ -4,7 +4,7 @@ from string import Template
 import pandas as pd
 import streamlit as st
 
-APP_VERSION = "0.0.6"
+APP_VERSION = "0.1.0"
 
 FEEDER_TIME_COL = "add_at"
 STAT_TIME_COL = "mod_at"
