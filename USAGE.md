@@ -1,7 +1,7 @@
 # Using Stat Cap Compare
 
 The app answers one question: **do the feeder service and the stat-cap service agree on vehicle capacity?** You upload
-the CSV log from each side, and the app pairs the rows up and highlights every disagreement.
+the CSV log from each side, and the app pairs the readings up and highlights every disagreement.
 
 See [INSTALL.md](INSTALL.md) to get it running. Start it with:
 
@@ -11,17 +11,16 @@ streamlit run app.py
 
 Then pick a page from the sidebar.
 
-## The seven pages
+## The six pages
 
-| Page                             | What it does                                              | Files needed                |
-|----------------------------------|-----------------------------------------------------------|-----------------------------|
-| **Compare Stat Only**            | Compares every row in both logs, ignoring sessions        | feeder + stat-cap           |
-| **Compare Stat with Session**    | Compares only rows that fall inside a session window      | session + feeder + stat-cap |
-| **Compare Stat Outside Session** | Compares only rows that fall outside every session window | session + feeder + stat-cap |
-| **Session Filter**               | Browses and filters the session log on its own            | session                     |
-| **Stat Cap Filter**              | Browses and filters the stat-cap log on its own           | stat-cap                    |
-| **Feeder Cap Filter**            | Browses and filters the feeder log on its own             | feeder                      |
-| **Generate SQL**                 | Produces the three export queries that yield those CSVs   | none                        |
+| Page                       | What it does                                                                 | Files needed                       |
+|----------------------------|------------------------------------------------------------------------------|------------------------------------|
+| **Compare Cross-Counting** | Reconciles readings, accounting for cross-counted (split) route A→B rows     | feeder + stat-cap                  |
+| **Generate SQL**           | Produces the three export queries that yield those CSVs                      | none                               |
+| **Session Filter**         | Browses and filters the session log on its own                               | session                            |
+| **Stat Cap Filter**        | Browses and filters the stat-cap log on its own                              | stat-cap                           |
+| **Feeder Cap Filter**      | Browses and filters the feeder log on its own                                | feeder                             |
+| **Sum Filter**             | Sums `inc`/`dec` after filtering by vhc, network, node, and session          | session + (feeder or stat-cap)     |
 
 ## Input files
 
@@ -54,7 +53,7 @@ Required columns:
 
 - `op_id`, `vhc_id`
 - `add_at`, `end_at` — the start and end of the session window
-- `is_tali` — boolean, used by the `is_tali` filter on the session pages
+- `is_tali` — boolean, used by the `is_tali` filter on the Sum Filter page
 
 Timestamps are parsed leniently (mixed formats are accepted) and truncated to milliseconds, so
 `2026-07-19 00:00:16.048973` and `2026-07-10T15:27:57` both work. Unparseable timestamps become empty and will not match
@@ -69,89 +68,151 @@ Ready-made samples live in `example_data/`.
     - stat-cap side uses `coalesce(src_at, mod_at)` — `src_at` when it has a value,
       `mod_at` when `src_at` is empty or the column is absent entirely
 
-   This is the same rule on all three comparison pages, and the session pages use it for session-window filtering too.
-   The resulting column is displayed as `src_at`.
-2. The two sides are outer-joined on that key, so nothing is dropped.
-3. Each resulting row is labelled:
-
-| `row_status`  | Meaning                                         | Row colour |
-|---------------|-------------------------------------------------|------------|
-| `match`       | Both sides present, `cur`/`inc`/`dec` identical | green      |
-| `mismatch`    | Both sides present, at least one value differs  | red        |
-| `feeder_only` | No stat-cap row at that key and timestamp       | amber      |
-| `stat_only`   | No feeder row at that key and timestamp         | amber      |
+   Sum Filter uses the same rule for session-window filtering. The resulting column is displayed as `src_at`.
+2. Feeder rows sharing that key are collapsed into one reading, because the feeder may legitimately split one reading
+   into two rows (see [Compare Cross-Counting](#compare-cross-counting)).
+3. The two sides are outer-joined on that key, so nothing is dropped, and each reading gets a `row_status` — see
+   [Result statuses](#result-statuses).
 
 Matching is exact on the millisecond. A feeder event and a stat-cap event that describe the same thing one millisecond
 apart show up as a `feeder_only` / `stat_only` pair, not as a mismatch — worth remembering when you read the results.
 
-## Reading the results
+### Mismatch vs. unmatched
 
-Every comparison page shows the same three sections.
+The two problem groups mean different things:
 
-### Metrics
+| Group         | Statuses                                                        | In both files? | Values compared?     | Usual cause                                                                                   |
+|---------------|-----------------------------------------------------------------|----------------|----------------------|-----------------------------------------------------------------------------------------------|
+| **Mismatch**  | `mismatch`, `split_mismatch`                                    | yes            | yes — and they differ | feeder **changed**, lost, or duplicated a counter value while passing the reading through     |
+| **Unmatched** | `feeder_only`, `stat_only`                                      | no — one side  | no                   | the reading was **lost**, the timestamps do not line up exactly, or the exports cover different vehicles |
 
-- **Total rows compared** — rows in the joined result
-- **Matches** — rows where both sides agree
-- **Mismatches** — rows where both sides exist but values differ
-- **Unmatched (no counterpart)** — the `feeder_only` plus `stat_only` rows
+**Mismatch** — both logs have a reading at the same `op_id` + `vhc_id` + timestamp, but at least one of `cur`, `inc`,
+`dec` differs:
 
-These counts always reflect the whole result, not the filtered view below.
+| Side     | `cur` | `inc` | `dec` |
+|----------|-------|-------|-------|
+| stat-cap | 20    | 5     | 8     |
+| feeder   | 20    | 5     | **7** |
 
-### Filters
+**Unmatched** — only one log has a reading at that `op_id` + `vhc_id` + timestamp, so there is nothing to compare
+against:
 
-- **op_id / vhc_id pills** — click to narrow the table to specific IDs. Selecting nothing means *all*, which is the
-  default.
-- **Show only diffs** (on by default) — hides `match` rows so only problems remain.
-- **Show feeder-only** / **Show stat-cap-only** — toggle the unmatched rows in or out.
+- `feeder_only` — feeder has the reading, stat-cap does not
+- `stat_only` — stat-cap has the reading, feeder does not
 
-To see everything including the matches, untick *Show only diffs*.
+| Side     | timestamp      | `cur` | `inc` | `dec` |
+|----------|----------------|-------|-------|-------|
+| stat-cap | `10:00:00.120` | 20    | 5     | 8     |
+| feeder   | —              | —     | —     | —     |
 
-### Table
-
-Columns are laid out for side-by-side reading:
-
-```
-op_id | vhc_id | cur_feeder | cur_stat | inc_feeder | inc_stat | dec_feeder | dec_stat | add_at | src_at | row_status | [session columns]
-```
-
-On the session pages, four extra columns show which session a row landed in:
-`session_add_at`, `session_end_at`, `session_op_id`, `session_vhc_id`.
-
-Sort by clicking a header; use the table's built-in search and download-as-CSV controls in its top-right corner to
-export what you are looking at.
+A mismatch is evidence that feeder computed something wrong. A large number of unmatched rows is more often a
+timestamp problem than real data loss — check for a `feeder_only` and a `stat_only` row on the same vehicle a few
+milliseconds apart before treating them as missing events.
 
 ## Page walkthroughs
 
-### Compare Stat Only
+### Compare Cross-Counting
 
-Upload the feeder log and the stat-cap log. This is the widest comparison — it covers every logged row regardless of
-whether a session was active.
+Upload the feeder log and the stat-cap log — no session file needed. The page does not assume one feeder row per
+stat-cap reading: a reading taken at a stop shared by two routes (a vehicle ending a run
+on route A and starting one on route B) is legitimately written by the feeder service as **two** rows, one per route —
+see `feeder_stat_cap_cross_counting_explained.md` for the full explanation.
 
-Use it for: a first pass over a day of data, or when you have no session export.
+#### How a reading is reconstructed
 
-Like the session pages, it matches the feeder's `add_at` against the stat-cap
-`coalesce(src_at, mod_at)` — `src_at` is the timestamp the event originated at, so it lines up with `add_at` more
-directly than `mod_at` does.
+The unit of comparison is a **reading**, not a row. Feeder rows are grouped by `op_id` + `vhc_id` + `add_at`, and
+each group is collapsed back into the single source reading it came from:
 
-### Compare Stat with Session
+| Value              | Built from                                   | Why                                                    |
+|--------------------|----------------------------------------------|--------------------------------------------------------|
+| `feeder_row_count` | number of feeder rows in the group           | 1 = normal, 2 = split, 3+ = fault                      |
+| `feeder_inc`       | **sum** of `inc` across the group            | a split moves `inc` to the boarding half, never copies it |
+| `feeder_dec`       | **sum** of `dec` across the group            | a split moves `dec` to the alighting half              |
+| `feeder_cur`       | `cur` of the **first** row only              | a split copies `cur` onto both halves — summing would double it |
 
-Upload the session log first, then the two capacity logs.
+The reconstructed reading is then outer-joined to stat-cap on `op_id` + `vhc_id` + `src_at` (the timestamp rule
+under [How the comparison works](#how-the-comparison-works)), and `cur`, `inc`, `dec` must be identical on both sides. A missing value on either side counts as
+`0`.
 
-An `is_tali` selector appears above the results — leave it on **All**, or pick **True** / **False** to restrict the
-comparison to those sessions.
+#### Metrics
 
-Only rows whose timestamp falls between a session's `add_at` and `end_at` (for the same
-`op_id` + `vhc_id`) are compared. If a row falls inside several overlapping sessions, the first matching one is
-attributed to it.
+The first row describes the inputs, the second breaks **Readings** down by result:
 
-Use it for: verifying behaviour during actual trips, where discrepancies matter most.
+| Metric                         | Counts                                                                   |
+|--------------------------------|--------------------------------------------------------------------------|
+| **Feeder rows**                | rows in the uploaded feeder CSV                                          |
+| **Stat-cap rows**              | rows in the uploaded stat-cap CSV                                        |
+| **Readings**                   | rows of the joined result — one per reading, from either side            |
+| **Match**                      | `match` readings                                                         |
+| **Split match**                | `split_match` readings                                                   |
+| **Mismatch**                   | `mismatch` **plus** `split_mismatch` readings                            |
+| **Fault (3+ rows)**            | `fault` readings                                                         |
+| **Unmatched (no counterpart)** | `feeder_only` **plus** `stat_only` readings                              |
 
-### Compare Stat Outside Session
+The second row always adds up to **Readings**. **Readings** is usually lower than **Feeder rows**, because each
+split reading collapses two feeder rows into one (and a `fault` reading collapses three or more). The metrics
+always reflect the whole result, not the filtered view.
 
-Same three uploads and the same `is_tali` selector, but the filter is inverted: only rows that fall inside *no* session
-window are compared.
+#### Result statuses
 
-Use it for: catching capacity events logged when no trip was in progress — often a sign of stale or replayed data.
+| `row_status`     | Feeder rows | Meaning                                                                                  | Row colour |
+|------------------|-------------|------------------------------------------------------------------------------------------|------------|
+| `match`          | 1           | Normal reading; `cur`/`inc`/`dec` identical to stat-cap                                   | green      |
+| `split_match`    | 2           | Cross-counted reading; the two halves add back up to the stat-cap reading                | blue       |
+| `mismatch`       | 1           | Normal reading, but at least one of `cur`/`inc`/`dec` differs from stat-cap              | red        |
+| `split_mismatch` | 2           | Cross-counted reading whose halves do **not** add back up to stat-cap                    | light red  |
+| `fault`          | 3+          | More rows than a split can produce — values are not compared; always a bug               | dark red   |
+| `feeder_only`    | 1+          | Feeder wrote the reading, but stat-cap has nothing at that key and timestamp             | amber      |
+| `stat_only`      | 0           | Stat-cap has the reading, but feeder wrote no row for it                                  | amber      |
+
+Examples, for a stat-cap reading of `cur=20, inc=5, dec=8`:
+
+| Feeder rows (`cur` / `inc` / `dec`)      | Reconstructed   | `row_status`     |
+|------------------------------------------|-----------------|------------------|
+| `20/5/8`                                 | `20/5/8`        | `match`          |
+| `20/5/7`                                 | `20/5/7`        | `mismatch`       |
+| `20/0/8` + `20/5/0`                      | `20/5/8`        | `split_match`    |
+| `20/0/8` + `20/4/0`                      | `20/4/8`        | `split_mismatch` |
+| `20/5/8` + `20/5/0` (inc not zeroed on A) | `20/10/8`       | `split_mismatch` |
+| three rows at the same `add_at`          | —               | `fault`          |
+
+What the problem statuses usually point to:
+
+- **`mismatch`** — feeder altered a reading it should have passed through unchanged.
+- **`split_mismatch`** — feeder split the reading but lost, duplicated, or failed to zero a counter on one half.
+- **`fault`** — duplicate writes, or the feeder export mixes several `rule_op_id`s (the Generate SQL query filters on
+  one, so this should not happen with its output).
+- **`feeder_only` / `stat_only`** — usually a timestamp offset. `feeder_only` also appears
+  for vehicles an operator monitors but does not own: the feeder export filters on `rule_op_id`, the stat-cap export
+  on `op_id`.
+
+Known gaps in the check: `cur` is read from the first feeder row only, so two halves carrying different `cur` values
+are not caught; and only the totals are compared, so a split whose halves are shaped wrongly (e.g. `inc` on both
+halves) but still sums correctly shows as `split_match`.
+
+#### Route A → Route B counter
+
+For each split reading the two halves are told apart: the half with only `dec` is **route A** (the alighting half,
+the run that is ending) and the half with only `inc` is **route B** (the boarding half, the run that is starting). If
+both counters are zero, the half whose reading time is closest to its `session_end_at` is taken as route A. The
+`net_id`, `net_ver`, `seq`, and `nod_id` of each half are stored as `route_a_*` / `route_b_*` columns.
+
+The counter table groups split readings by `route_a_net_id`, `route_a_nod_id`, `route_b_net_id`, `route_b_nod_id`
+and shows how many times each transition occurred, most frequent first. It needs a `session_end_at` column in the
+feeder CSV; without it splits are still counted in the statuses, but the route columns stay empty.
+
+#### Table
+
+```
+op_id | vhc_id | add_at | feeder_row_count | feeder_cur | feeder_inc | feeder_dec | route_a_* | route_b_* | src_at | stat_cur | stat_inc | stat_dec | row_status
+```
+
+The `op_id` / `vhc_id` pills narrow the table (selecting nothing means *all*), and a `row_status` multiselect
+chooses which statuses are shown — everything except `match` by default. Sort by clicking a header; use the table's
+built-in search and download-as-CSV controls in its top-right corner to export what you are looking at.
+
+Use it for: telling a genuine mismatch apart from a correctly cross-counted split, and for auditing which route pairs
+are cross-counting and how often.
 
 ### Session Filter
 
@@ -163,7 +224,7 @@ Upload just the session log. You get:
 - a caption reporting how many of the total sessions are shown
 - the filtered session table
 
-Use it for: finding the session windows worth investigating, before going back to a comparison page.
+Use it for: finding the session windows worth investigating.
 
 ### Stat Cap Filter
 
@@ -223,7 +284,7 @@ The stat-cap query is an `OR` of two branches, because the row's own timestamp d
   the event it describes)
 - `src_at is null` → nothing to window on, so `mod_at` itself must fall inside the range
 
-Without the second branch the `src_at is null` rows would be dropped by the export, even though the comparison pages fall
+Without the second branch the `src_at is null` rows would be dropped by the export, even though the comparison falls
 back to `mod_at` for exactly those rows.
 
 Copy a single query with the button in the top-right of its code block, or use **Download query.sql** to get all three
@@ -238,14 +299,14 @@ The templates mirror `example_data/sql/query.sql` and live in `QUERY_TEMPLATES` 
 
 1. Open **Generate SQL**, set the op_id and the Asia/Bangkok time range you are checking, and run the three queries
    against the database to get the CSVs.
-2. Open **Session Filter**, confirm the sessions look sane, and note the `op_id` /
-   `vhc_id` pairs of interest.
-3. Open **Compare Stat with Session** and upload all three files. Leave *Show only diffs*
-   ticked.
-4. If mismatches appear, use the `op_id` / `vhc_id` pills to isolate one vehicle and read its rows in timestamp order.
-5. Check **Compare Stat Outside Session** for events that should not exist at all.
-6. Fall back to **Compare Stat Only** if you suspect the session windows themselves are wrong — it removes sessions from
-   the equation entirely.
+2. Open **Compare Cross-Counting** and upload the feeder and stat-cap files. Check that the metrics reconcile:
+   **Readings** should equal the stat-cap rows, and **Feeder rows** should equal **Readings** plus one per
+   **Split match**.
+3. If mismatches, faults, or unmatched readings appear, use the `op_id` / `vhc_id` pills to isolate one vehicle and
+   read its readings in timestamp order.
+4. Use the **Route A → Route B counter** to confirm that splits only happen between route pairs you expect.
+5. Drill into a vehicle, network, or node with **Feeder Cap Filter**, **Stat Cap Filter**, or **Sum Filter** when a
+   discrepancy needs a closer look.
 
 ## Tips and limits
 
@@ -253,7 +314,7 @@ The templates mirror `example_data/sql/query.sql` and live in `QUERY_TEMPLATES` 
 - **Nothing is written to disk.** Uploads live in memory for the session only. Use the table's download button to keep a
   result.
 - **Large results render slowly.** Every row is styled individually, so a table with hundreds of thousands of cells
-  takes a while. Keep *Show only diffs* on, or narrow with the ID pills.
+  takes a while. Leave `match` out of the `row_status` selection, or narrow with the ID pills.
 - **A wall of `feeder_only` / `stat_only` rows** usually means a timestamp problem — a clock offset between services, or
   a column parsed as empty — not thousands of genuinely missing events. Check a few raw rows in the CSV before treating
   it as data loss.

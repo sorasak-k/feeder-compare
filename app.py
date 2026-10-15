@@ -22,9 +22,7 @@ st.logo(
 pg = st.navigation(
     {
         "Test": [
-            st.Page("pages/compare.py", title="Compare Stat Only"),
-            st.Page("pages/compare_with_session.py", title="Compare Stat with Session"),
-            st.Page("pages/compare_outside_session.py", title="Compare Stat Outside Session"),
+            st.Page("pages/cross_counting_compare.py", title="Compare Cross-Counting"),
             st.Page("pages/generate_sql.py", title="Generate SQL"),
         ],
         "Dev": [

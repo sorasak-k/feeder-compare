@@ -4,7 +4,7 @@ from string import Template
 import pandas as pd
 import streamlit as st
 
-APP_VERSION = "0.0.5"
+APP_VERSION = "0.0.6"
 
 FEEDER_TIME_COL = "add_at"
 STAT_TIME_COL = "mod_at"
@@ -98,63 +98,138 @@ def filter_by_session_window(df, time_col, session_df, extra_cols=()):
     return result.join(matched.set_index("index")[SESSION_COLS + extra_present])
 
 
-def filter_outside_session_window(df, time_col, session_df):
-    matched = _match_session_windows(df, time_col, session_df)
-    inside_idx = set(matched["index"])
-    return df.loc[~df.index.isin(inside_idx)].copy()
+ROUTE_COLS = ["net_id", "net_ver", "seq", "nod_id"]
+CROSS_COUNT_STATUSES = [
+    "match", "split_match", "mismatch", "split_mismatch", "fault", "feeder_only", "stat_only",
+]
 
 
-def compare(feeder_df, stat_df, stat_time_col=STAT_SRC_TIME_COL):
-    feeder_df = feeder_df.copy()
-    stat_df = stat_df.copy()
-    feeder_df["match_time"] = feeder_df[FEEDER_TIME_COL]
-    stat_df["match_time"] = stat_df[stat_time_col]
+def _classify_split_pair(group):
+    """Given the two feeder rows for one cross-counted reading, return (alighting_row, boarding_row).
 
-    session_cols = [c for c in SESSION_COLS if c in feeder_df.columns and c in stat_df.columns]
+    Per feeder_stat_cap_cross_counting_explained.md: the alighting half keeps `dec` with `inc`
+    zeroed, the boarding half keeps `inc` with `dec` zeroed. When both counters are zero (a real
+    but rare case the doc calls out), fall back to session timing: the alighting half's own
+    reading time sits closer to its session's `session_end_at` (the run that is ending).
+    """
+    dec_rows = group[(group["dec"] > 0) & (group["inc"] == 0)]
+    inc_rows = group[(group["inc"] > 0) & (group["dec"] == 0)]
+    if len(dec_rows) == 1 and len(inc_rows) == 1:
+        return dec_rows.iloc[0], inc_rows.iloc[0]
 
-    feeder_cols = KEY_COLS + ["match_time", FEEDER_TIME_COL] + VALUE_COLS + session_cols
-    stat_cols = KEY_COLS + ["match_time", stat_time_col] + VALUE_COLS + session_cols
+    ends_soonest_idx = (group["session_end_at"] - group[FEEDER_TIME_COL]).abs().idxmin()
+    alighting = group.loc[ends_soonest_idx]
+    boarding = group.loc[[i for i in group.index if i != ends_soonest_idx][0]]
+    return alighting, boarding
+
+
+def summarize_feeder_readings(feeder_df):
+    """Collapse feeder_vehicle_stat_cap_log rows to one row per (op_id, vhc_id, add_at) reading,
+    reconstructing the source counters and, for cross-counted (split) readings, the route-A ->
+    route-B transition. See feeder_stat_cap_cross_counting_explained.md section 3.
+    """
+    present_route_cols = [c for c in ROUTE_COLS if c in feeder_df.columns]
+    has_session_end = "session_end_at" in feeder_df.columns
+    if has_session_end and not pd.api.types.is_datetime64_any_dtype(feeder_df["session_end_at"]):
+        feeder_df = feeder_df.copy()
+        feeder_df["session_end_at"] = parse_datetime(feeder_df["session_end_at"])
+
+    records = []
+    for (op_id, vhc_id, add_at), group in feeder_df.groupby(KEY_COLS + [FEEDER_TIME_COL], dropna=False):
+        row_count = len(group)
+        record = {
+            "op_id": op_id,
+            "vhc_id": vhc_id,
+            FEEDER_TIME_COL: add_at,
+            "feeder_row_count": row_count,
+            "feeder_cur": group["cur"].iloc[0],
+            "feeder_inc": group["inc"].sum(min_count=1),
+            "feeder_dec": group["dec"].sum(min_count=1),
+        }
+        for col in present_route_cols:
+            record[f"route_a_{col}"] = pd.NA
+            record[f"route_b_{col}"] = pd.NA
+        if row_count == 2 and present_route_cols and has_session_end:
+            alighting, boarding = _classify_split_pair(group)
+            for col in present_route_cols:
+                record[f"route_a_{col}"] = alighting[col]
+                record[f"route_b_{col}"] = boarding[col]
+        records.append(record)
+
+    return pd.DataFrame.from_records(records)
+
+
+def compare_cross_counting(feeder_df, stat_df, stat_time_col=STAT_SRC_TIME_COL):
+    """Reconcile feeder_vehicle_stat_cap_log against vehicle_stat_cap_log reading by reading,
+    accounting for cross-counted (split) readings instead of comparing rows 1:1.
+    """
+    summary = summarize_feeder_readings(feeder_df)
+    summary["match_time"] = summary[FEEDER_TIME_COL]
+
+    stat = stat_df.copy()
+    stat["match_time"] = stat[stat_time_col]
+    stat = stat.rename(columns={"cur": "stat_cur", "inc": "stat_inc", "dec": "stat_dec"})
 
     merged = pd.merge(
-        feeder_df[feeder_cols],
-        stat_df[stat_cols],
+        summary,
+        stat[KEY_COLS + ["match_time", stat_time_col, "stat_cur", "stat_inc", "stat_dec"]],
         on=KEY_COLS + ["match_time"],
         how="outer",
-        suffixes=("_feeder", "_stat"),
         indicator=True,
     )
 
-    for col in session_cols:
-        merged[col] = merged[f"{col}_feeder"].combine_first(merged[f"{col}_stat"])
-        merged = merged.drop(columns=[f"{col}_feeder", f"{col}_stat"])
-
-    merged = merged.sort_values(KEY_COLS + ["match_time"])
+    for col in ("feeder_cur", "feeder_inc", "feeder_dec", "stat_cur", "stat_inc", "stat_dec"):
+        merged[col] = merged[col].fillna(0)
 
     def row_status(row):
         if row["_merge"] == "left_only":
             return "feeder_only"
         if row["_merge"] == "right_only":
             return "stat_only"
-        for col in VALUE_COLS:
-            if row[f"{col}_feeder"] != row[f"{col}_stat"]:
-                return "mismatch"
-        return "match"
+        if row["feeder_row_count"] >= 3:
+            return "fault"
+        ok = (
+            row["feeder_cur"] == row["stat_cur"]
+            and row["feeder_inc"] == row["stat_inc"]
+            and row["feeder_dec"] == row["stat_dec"]
+        )
+        if row["feeder_row_count"] == 2:
+            return "split_match" if ok else "split_mismatch"
+        return "match" if ok else "mismatch"
 
     merged["row_status"] = merged.apply(row_status, axis=1)
-    merged = merged.drop(columns=["_merge"])
+    merged["feeder_row_count"] = merged["feeder_row_count"].fillna(0).astype(int)
+    merged = merged.drop(columns=["_merge", "match_time"])
+    merged = merged.sort_values(KEY_COLS + [FEEDER_TIME_COL])
 
-    display_cols = list(KEY_COLS)
-    for col in VALUE_COLS:
-        display_cols += [f"{col}_feeder", f"{col}_stat"]
-    display_cols += [FEEDER_TIME_COL, stat_time_col, "row_status"] + session_cols
-
-    return merged[display_cols]
+    return merged
 
 
-def highlight_row(row):
+def route_transition_counts(cross_result):
+    """Count how many split readings transitioned from each route A to each route B."""
+    if "route_a_net_id" not in cross_result.columns:
+        return pd.DataFrame(columns=["route_a_net_id", "route_b_net_id", "count"])
+
+    splits = cross_result.dropna(subset=["route_a_net_id", "route_b_net_id"])
+    if splits.empty:
+        return pd.DataFrame(columns=["route_a_net_id", "route_b_net_id", "count"])
+
+    cols = [c for c in ("route_a_net_id", "route_a_nod_id", "route_b_net_id", "route_b_nod_id") if c in splits.columns]
+    return (
+        splits.groupby(cols, dropna=False)
+        .size()
+        .reset_index(name="count")
+        .sort_values("count", ascending=False)
+    )
+
+
+def highlight_cross_row(row):
     color = {
         "match": "background-color: #1e4620",
+        "split_match": "background-color: #123a52",
         "mismatch": "background-color: #5c1a1a",
+        "split_mismatch": "background-color: #7a2a2a",
+        "fault": "background-color: #3d0d0d",
         "feeder_only": "background-color: #4d3b0a",
         "stat_only": "background-color: #4d3b0a",
     }.get(row["row_status"], "")
@@ -286,18 +361,26 @@ def render_sum_metrics(df, label="rows"):
     m3.metric("Sum dec", int(df["dec"].sum()) if len(df) else 0)
 
 
-def render_comparison(result):
-    total = len(result)
-    matches = (result["row_status"] == "match").sum()
-    mismatches = (result["row_status"] == "mismatch").sum()
-    unmatched = total - matches - mismatches
+def render_cross_counting_comparison(result, feeder_row_count, stat_row_count):
+    counts = result["row_status"].value_counts()
 
-    m1, m2, m3, m4 = st.columns(4)
-    m1.metric("Total rows compared", total)
-    m2.metric("Matches", matches)
-    m3.metric("Mismatches", mismatches)
-    m4.metric("Unmatched (no counterpart)", unmatched)
+    i1, i2, i3 = st.columns(3)
+    i1.metric("Feeder rows", feeder_row_count)
+    i2.metric("Stat-cap rows", stat_row_count)
+    i3.metric("Readings", len(result))
 
+    m1, m2, m3, m4, m5 = st.columns(5)
+    m1.metric("Match", int(counts.get("match", 0)))
+    m2.metric("Split match", int(counts.get("split_match", 0)))
+    m3.metric("Mismatch", int(counts.get("mismatch", 0) + counts.get("split_mismatch", 0)))
+    m4.metric("Fault (3+ rows)", int(counts.get("fault", 0)))
+    m5.metric("Unmatched (no counterpart)", int(counts.get("feeder_only", 0) + counts.get("stat_only", 0)))
+
+    st.subheader("Route A → Route B counter")
+    st.caption("Cross-counted (split) readings, grouped by the route pair they transitioned between.")
+    st.dataframe(route_transition_counts(result), width="stretch")
+
+    st.subheader("Readings")
     op_ids = sorted(int(v) for v in result["op_id"].dropna().unique())
     vhc_ids = sorted(int(v) for v in result["vhc_id"].dropna().unique())
 
@@ -305,30 +388,25 @@ def render_comparison(result):
     with o1:
         st.caption("op_id (none = all)")
         selected_op_ids = st.pills(
-            "op_id", op_ids, selection_mode="multi", default=[], label_visibility="collapsed"
+            "op_id", op_ids, selection_mode="multi", default=[], label_visibility="collapsed", key="cross_op_id"
         )
     with o2:
         st.caption("vhc_id (none = all)")
         selected_vhc_ids = st.pills(
-            "vhc_id", vhc_ids, selection_mode="multi", default=[], label_visibility="collapsed"
+            "vhc_id", vhc_ids, selection_mode="multi", default=[], label_visibility="collapsed", key="cross_vhc_id"
         )
 
-    f1, f2, f3 = st.columns(3)
-    show_only_diff = f1.checkbox("Show only diffs", value=True)
-    show_feeder_only = f2.checkbox("Show feeder-only", value=True)
-    show_stat_only = f3.checkbox("Show stat-cap-only", value=True)
+    default_statuses = [s for s in CROSS_COUNT_STATUSES if s != "match"]
+    selected_statuses = st.multiselect(
+        "row_status", CROSS_COUNT_STATUSES, default=default_statuses, key="cross_status"
+    )
 
     display_result = result
     if selected_op_ids:
         display_result = display_result[display_result["op_id"].isin(selected_op_ids)]
     if selected_vhc_ids:
         display_result = display_result[display_result["vhc_id"].isin(selected_vhc_ids)]
-    if show_only_diff:
-        display_result = display_result[display_result["row_status"] != "match"]
-    if not show_feeder_only:
-        display_result = display_result[display_result["row_status"] != "feeder_only"]
-    if not show_stat_only:
-        display_result = display_result[display_result["row_status"] != "stat_only"]
+    display_result = display_result[display_result["row_status"].isin(selected_statuses)]
 
     num_cells = display_result.shape[0] * display_result.shape[1]
     max_elements = pd.get_option("styler.render.max_elements")
@@ -336,6 +414,6 @@ def render_comparison(result):
         pd.set_option("styler.render.max_elements", num_cells)
 
     st.dataframe(
-        display_result.style.apply(highlight_row, axis=1),
+        display_result.style.apply(highlight_cross_row, axis=1),
         width="stretch",
     )

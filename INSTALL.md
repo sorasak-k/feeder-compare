@@ -247,9 +247,9 @@ streamlit run app.py --server.maxUploadSize 500
 
 ## 6. Check it works with the sample data
 
-1. Open the **Compare Stat Only** page.
-2. Upload `example_data/feeder_data/feeder_vehicle_stat_cap_log.csv` as the feeder file.
-3. Upload `example_data/stat_cap_data/vehicle_stat_cap_log.csv` as the stat-cap file.
+1. Open the **Compare Cross-Counting** page.
+2. Upload `example_data/csv/feeder.csv` as the feeder file.
+3. Upload `example_data/csv/stat_cap.csv` as the stat-cap file.
 
 A metrics row and a colour-coded comparison table should appear. If it does, the installation is complete — continue
 with [USAGE.md](USAGE.md).
